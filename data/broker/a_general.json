@@ -1,0 +1,14 @@
+{
+  "account_id": "a-general",
+  "broker": "A증권",
+  "account_type": "일반 위탁",
+  "alias": "A증권 일반 위탁",
+  "account_no": "1234-5678-9012",
+  "base_currency": "KRW",
+  "cash": [{"currency": "KRW", "amount": 2000000}],
+  "holdings": [
+    {"symbol": "005930", "name": "삼성전자", "quantity": 100, "avg_price": 65000, "currency": "KRW", "asset_class": "국내주식", "sector": "반도체", "country": "KR"},
+    {"symbol": "000660", "name": "SK하이닉스", "quantity": 20, "avg_price": 150000, "currency": "KRW", "asset_class": "국내주식", "sector": "반도체", "country": "KR"},
+    {"symbol": "069500", "name": "KODEX 200", "quantity": 50, "avg_price": 33000, "currency": "KRW", "asset_class": "ETF", "sector": "국내지수", "country": "KR"}
+  ]
+}

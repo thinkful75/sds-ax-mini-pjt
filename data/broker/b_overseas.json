@@ -1,0 +1,14 @@
+{
+  "account_id": "b-overseas",
+  "broker": "B증권",
+  "account_type": "해외주식",
+  "alias": "B증권 해외주식",
+  "account_no": "9876-5432-7788",
+  "base_currency": "USD",
+  "cash": [{"currency": "USD", "amount": 1000}],
+  "holdings": [
+    {"symbol": "AAPL", "name": "Apple", "quantity": 30, "avg_price": 180.00, "currency": "USD", "asset_class": "해외주식", "sector": "IT기기", "country": "US"},
+    {"symbol": "NVDA", "name": "NVIDIA", "quantity": 40, "avg_price": 100.00, "currency": "USD", "asset_class": "해외주식", "sector": "반도체", "country": "US"},
+    {"symbol": "SCHD", "name": "Schwab US Dividend Equity ETF", "quantity": 100, "avg_price": 26.00, "currency": "USD", "asset_class": "ETF", "sector": "배당", "country": "US"}
+  ]
+}

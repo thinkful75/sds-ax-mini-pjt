@@ -1,0 +1,13 @@
+boto3==1.43.124
+chromadb==1.5.9
+fastapi==0.162.0
+langchain==1.4.9
+langchain-aws==1.9.1
+langchain-chroma==1.1.0
+langchain-core==1.7.6
+langgraph==1.2.19
+pandas==3.1.1
+pydantic==2.14.2
+python-dotenv==1.2.4
+rank-bm25==0.2.2
+uvicorn==0.54.0

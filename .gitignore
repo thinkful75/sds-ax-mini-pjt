@@ -1,0 +1,7 @@
+.env
+__pycache__/
+.venv/
+chroma_db/
+.kis_token*
+.ouroboros/
+CLAUDE.md.bak

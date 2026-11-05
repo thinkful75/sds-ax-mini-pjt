@@ -1,0 +1,345 @@
+{
+  "meta": {
+    "as_of": "2026-11-06 15:30",
+    "fx_usdkrw": 1380,
+    "rounding": "원화 원 단위, 달러·% 소수 2자리 (ROUND_HALF_UP)",
+    "tolerance": {
+      "amount_relative": 0.001,
+      "pct_absolute": 0.1
+    },
+    "assumptions": [
+      "달러 자산의 매입금액도 현재 환율 1,380으로 원화 환산한다(환차손익 미반영)",
+      "현금은 매입금액=평가금액, 평가손익 0으로 두고 비중 분모에 포함한다"
+    ]
+  },
+  "lenses": {
+    "account": {
+      "rows": {
+        "a-general": {
+          "cost_krw": 13150000,
+          "market_value_krw": 14650000,
+          "unrealized_pnl_krw": 1500000,
+          "return_pct": 11.41,
+          "weight_pct": 29.81
+        },
+        "a-isa": {
+          "cost_krw": 11050000,
+          "market_value_krw": 12000000,
+          "unrealized_pnl_krw": 950000,
+          "return_pct": 8.6,
+          "weight_pct": 24.42
+        },
+        "b-overseas": {
+          "cost_krw": 17940000,
+          "market_value_krw": 22494000,
+          "unrealized_pnl_krw": 4554000,
+          "return_pct": 25.38,
+          "weight_pct": 45.77
+        }
+      },
+      "total": {
+        "cost_krw": 42140000,
+        "market_value_krw": 49144000,
+        "unrealized_pnl_krw": 7004000,
+        "return_pct": 16.62
+      },
+      "broker_subtotals": {
+        "A증권": {
+          "cost_krw": 24200000,
+          "market_value_krw": 26650000,
+          "unrealized_pnl_krw": 2450000,
+          "return_pct": 10.12,
+          "weight_pct": 54.23
+        },
+        "B증권": {
+          "cost_krw": 17940000,
+          "market_value_krw": 22494000,
+          "unrealized_pnl_krw": 4554000,
+          "return_pct": 25.38,
+          "weight_pct": 45.77
+        }
+      }
+    },
+    "asset_class": {
+      "rows": {
+        "국내주식": {
+          "cost_krw": 13250000,
+          "market_value_krw": 14500000,
+          "unrealized_pnl_krw": 1250000,
+          "return_pct": 9.43,
+          "weight_pct": 29.51
+        },
+        "ETF": {
+          "cost_krw": 12538000,
+          "market_value_krw": 14014000,
+          "unrealized_pnl_krw": 1476000,
+          "return_pct": 11.77,
+          "weight_pct": 28.52
+        },
+        "현금": {
+          "cost_krw": 3380000,
+          "market_value_krw": 3380000,
+          "unrealized_pnl_krw": 0,
+          "return_pct": 0.0,
+          "weight_pct": 6.88
+        },
+        "해외주식": {
+          "cost_krw": 12972000,
+          "market_value_krw": 17250000,
+          "unrealized_pnl_krw": 4278000,
+          "return_pct": 32.98,
+          "weight_pct": 35.1
+        }
+      },
+      "total": {
+        "cost_krw": 42140000,
+        "market_value_krw": 49144000,
+        "unrealized_pnl_krw": 7004000,
+        "return_pct": 16.62
+      }
+    },
+    "currency": {
+      "rows": {
+        "KRW": {
+          "cost_krw": 24200000,
+          "market_value_krw": 26650000,
+          "unrealized_pnl_krw": 2450000,
+          "return_pct": 10.12,
+          "weight_pct": 54.23
+        },
+        "USD": {
+          "cost_krw": 17940000,
+          "market_value_krw": 22494000,
+          "unrealized_pnl_krw": 4554000,
+          "return_pct": 25.38,
+          "weight_pct": 45.77,
+          "market_value_usd": 16300.0
+        }
+      },
+      "total": {
+        "cost_krw": 42140000,
+        "market_value_krw": 49144000,
+        "unrealized_pnl_krw": 7004000,
+        "return_pct": 16.62
+      }
+    },
+    "sector": {
+      "rows": {
+        "반도체": {
+          "cost_krw": 18770000,
+          "market_value_krw": 22228000,
+          "unrealized_pnl_krw": 3458000,
+          "return_pct": 18.42,
+          "weight_pct": 45.23
+        },
+        "국내지수": {
+          "cost_krw": 1650000,
+          "market_value_krw": 1750000,
+          "unrealized_pnl_krw": 100000,
+          "return_pct": 6.06,
+          "weight_pct": 3.56
+        },
+        "현금": {
+          "cost_krw": 3380000,
+          "market_value_krw": 3380000,
+          "unrealized_pnl_krw": 0,
+          "return_pct": 0.0,
+          "weight_pct": 6.88
+        },
+        "미국지수": {
+          "cost_krw": 5100000,
+          "market_value_krw": 6000000,
+          "unrealized_pnl_krw": 900000,
+          "return_pct": 17.65,
+          "weight_pct": 12.21
+        },
+        "배당": {
+          "cost_krw": 5788000,
+          "market_value_krw": 6264000,
+          "unrealized_pnl_krw": 476000,
+          "return_pct": 8.22,
+          "weight_pct": 12.75
+        },
+        "IT기기": {
+          "cost_krw": 7452000,
+          "market_value_krw": 9522000,
+          "unrealized_pnl_krw": 2070000,
+          "return_pct": 27.78,
+          "weight_pct": 19.38
+        }
+      },
+      "total": {
+        "cost_krw": 42140000,
+        "market_value_krw": 49144000,
+        "unrealized_pnl_krw": 7004000,
+        "return_pct": 16.62
+      }
+    },
+    "symbol": {
+      "rows": {
+        "005930": {
+          "cost_krw": 10250000,
+          "market_value_krw": 10800000,
+          "unrealized_pnl_krw": 550000,
+          "return_pct": 5.37,
+          "weight_pct": 21.98,
+          "name": "삼성전자",
+          "quantity": 150,
+          "avg_price": 68333.33,
+          "currency": "KRW"
+        },
+        "000660": {
+          "cost_krw": 3000000,
+          "market_value_krw": 3700000,
+          "unrealized_pnl_krw": 700000,
+          "return_pct": 23.33,
+          "weight_pct": 7.53,
+          "name": "SK하이닉스",
+          "quantity": 20,
+          "avg_price": 150000.0,
+          "currency": "KRW"
+        },
+        "069500": {
+          "cost_krw": 1650000,
+          "market_value_krw": 1750000,
+          "unrealized_pnl_krw": 100000,
+          "return_pct": 6.06,
+          "weight_pct": 3.56,
+          "name": "KODEX 200",
+          "quantity": 50,
+          "avg_price": 33000.0,
+          "currency": "KRW"
+        },
+        "CASH_KRW": {
+          "cost_krw": 2000000,
+          "market_value_krw": 2000000,
+          "unrealized_pnl_krw": 0,
+          "return_pct": 0.0,
+          "weight_pct": 4.07,
+          "name": "원화 현금",
+          "quantity": 2000000
+        },
+        "360750": {
+          "cost_krw": 5100000,
+          "market_value_krw": 6000000,
+          "unrealized_pnl_krw": 900000,
+          "return_pct": 17.65,
+          "weight_pct": 12.21,
+          "name": "TIGER 미국S&P500",
+          "quantity": 300,
+          "avg_price": 17000.0,
+          "currency": "KRW"
+        },
+        "279530": {
+          "cost_krw": 2200000,
+          "market_value_krw": 2400000,
+          "unrealized_pnl_krw": 200000,
+          "return_pct": 9.09,
+          "weight_pct": 4.88,
+          "name": "KODEX 고배당",
+          "quantity": 200,
+          "avg_price": 11000.0,
+          "currency": "KRW"
+        },
+        "AAPL": {
+          "cost_krw": 7452000,
+          "market_value_krw": 9522000,
+          "unrealized_pnl_krw": 2070000,
+          "return_pct": 27.78,
+          "weight_pct": 19.38,
+          "name": "Apple",
+          "quantity": 30,
+          "avg_price": 180.0,
+          "currency": "USD"
+        },
+        "NVDA": {
+          "cost_krw": 5520000,
+          "market_value_krw": 7728000,
+          "unrealized_pnl_krw": 2208000,
+          "return_pct": 40.0,
+          "weight_pct": 15.73,
+          "name": "NVIDIA",
+          "quantity": 40,
+          "avg_price": 100.0,
+          "currency": "USD"
+        },
+        "SCHD": {
+          "cost_krw": 3588000,
+          "market_value_krw": 3864000,
+          "unrealized_pnl_krw": 276000,
+          "return_pct": 7.69,
+          "weight_pct": 7.86,
+          "name": "Schwab US Dividend Equity ETF",
+          "quantity": 100,
+          "avg_price": 26.0,
+          "currency": "USD"
+        },
+        "CASH_USD": {
+          "cost_krw": 1380000,
+          "market_value_krw": 1380000,
+          "unrealized_pnl_krw": 0,
+          "return_pct": 0.0,
+          "weight_pct": 2.81,
+          "name": "달러 현금",
+          "quantity": 1000
+        }
+      },
+      "total": {
+        "cost_krw": 42140000,
+        "market_value_krw": 49144000,
+        "unrealized_pnl_krw": 7004000,
+        "return_pct": 16.62
+      }
+    }
+  },
+  "cases": {
+    "10_isa_sector": {
+      "rows": {
+        "반도체": {
+          "cost_krw": 3750000,
+          "market_value_krw": 3600000,
+          "unrealized_pnl_krw": -150000,
+          "return_pct": -4.0,
+          "weight_pct": 30.0
+        },
+        "미국지수": {
+          "cost_krw": 5100000,
+          "market_value_krw": 6000000,
+          "unrealized_pnl_krw": 900000,
+          "return_pct": 17.65,
+          "weight_pct": 50.0
+        },
+        "배당": {
+          "cost_krw": 2200000,
+          "market_value_krw": 2400000,
+          "unrealized_pnl_krw": 200000,
+          "return_pct": 9.09,
+          "weight_pct": 20.0
+        }
+      },
+      "total": {
+        "cost_krw": 11050000,
+        "market_value_krw": 12000000,
+        "unrealized_pnl_krw": 950000,
+        "return_pct": 8.6
+      }
+    },
+    "11_top": {
+      "symbol": "005930",
+      "symbol_name": "삼성전자",
+      "symbol_weight_pct": 21.98,
+      "sector": "반도체",
+      "sector_weight_pct": 45.23
+    },
+    "12_us_listed_unrealized_pnl": {
+      "krw": 4554000,
+      "usd": 3300.0
+    },
+    "13_b_broker_krw": {
+      "cost_krw": 17940000,
+      "market_value_krw": 22494000,
+      "unrealized_pnl_krw": 4554000,
+      "return_pct": 25.38
+    }
+  }
+}
