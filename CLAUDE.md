@@ -65,13 +65,13 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 - 액세스 키가 AKIA로 시작하는 장기 자격 증명이라 `AWS_SESSION_TOKEN`은 비워 둔다. 코드가 빈 값을 지운다.
 - Windows 콘솔에서 한글이 깨지면 `PYTHONIOENCODING=utf-8`을 붙이거나 출력을 파일로 받아 읽는다.
 
-이전트(`src/agent.py`, 모델 `ChatBedrockConverse`, 시스템 프롬프트에 가드레일 규칙) → 도구 호출 → `src/api.py`에서 답변 속 계좌번호 마스킹 → `{answer, contexts, trace}`
+이전트(`src/agent.py`, 모델 `ChatBedrockConverse`, 시스템 프롬프트에 가드레일 규칙) → 도구 호출 → `src/api.py`에서 출력 검사(도구·문서에 없는 숫자가 있으면 한 번 다시 쓰게 하고 trace에 `number_check`로 기록, 그다음 계좌번호 마스킹) → `{answer, contexts, trace}`
 
 파일 구성(정해진 3개 + 추가 2개, 그 밖의 파일은 요청 없이 만들지 않는다):
 - `src/agent.py`: 에이전트와 시스템 프롬프트. `python src/agent.py`로 시험 질문을 실행할 수 있게 한다.
 - `src/tools.py`: `get_portfolio()`와 `build_view(lens, filter)`. `data/broker/*.json`을 직접 읽는다.
 - `src/retriever.py`: `retrieve_docs(query)`. `data/docs/*.md` 대상 Chroma + BM25 하이브리드 검색. 각 문서 머리에 `doc_id`/`title`이 있고, 답변은 문서명을 인용해야 한다.
-- `src/api.py`: `POST /query`. 답변에 남은 계좌번호 패턴을 끝 4자리만 남기고 가린다.
+- `src/api.py`: `POST /query`와 `/` 채팅 화면. 출력 검사로 근거 없는 숫자를 걸러 다시 쓰게 하고, 답변에 남은 계좌번호 패턴을 끝 4자리만 남기고 가린다.
 - `evaluation/run_eval.py`: 채점 스크립트.
 
 도구 3개:

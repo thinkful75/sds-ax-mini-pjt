@@ -62,6 +62,20 @@ def get_agent():
     return create_agent(build_model(), tools=ALL_TOOLS, system_prompt=SYSTEM_PROMPT)
 
 
+REVISE_PROMPT = """아래 답변에는 도구 결과나 문서에 없는 숫자가 들어 있다: {numbers}
+이 숫자들은 직접 계산하거나 추정한 값이라 쓸 수 없다. 이 숫자와 그 숫자를 만드는 계산식·표 행·문장을 지워라.
+나머지 내용과 형식은 그대로 두고, 새 숫자는 넣지 마라. 다시 쓴 답변만 출력하라.
+
+[답변]
+{answer}"""
+
+
+def revise_answer(answer: str, numbers: list[str]) -> str:
+    """도구 결과에 없는 숫자를 지운 답변을 모델에게 한 번 다시 쓰게 한다."""
+    reply = build_model().invoke(REVISE_PROMPT.format(numbers=", ".join(numbers), answer=answer))
+    return reply.text or answer
+
+
 def _parse_tool_output(content) -> object:
     """도구 결과 메시지 내용을 가능하면 JSON 객체로 바꾼다."""
     if isinstance(content, list):
