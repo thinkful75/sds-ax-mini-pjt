@@ -1,4 +1,4 @@
-"""PortfolioLens RAG 파이프라인: data/docs/*.md 문서를 Chroma + BM25 하이브리드로 검색한다(retrieve_docs)."""
+"""PortfolioLens RAG 파이프라인: data/docs/*.md 문서를 Chroma + BM25 하이브리드로 찾고 LLM으로 리랭킹한다(retrieve_docs)."""
 
 import os
 import re
@@ -6,13 +6,54 @@ from functools import lru_cache
 from pathlib import Path
 
 from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from pydantic import BaseModel, Field
 from rank_bm25 import BM25Okapi
 
 DOCS_DIR = Path(__file__).resolve().parent.parent / "data" / "docs"
 EMBED_MODEL_ID = "amazon.titan-embed-text-v2:0"
-TOP_K = 3
+RERANK_MODEL_ID_DEFAULT = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+TOP_K = 3          # 최종으로 돌려줄 조각 수(최대)
+CANDIDATE_K = 8    # 리랭킹 전에 하이브리드 검색으로 뽑는 후보 수
 RRF_K = 60  # 순위 결합(Reciprocal Rank Fusion) 상수
+
+
+class RerankResult(BaseModel):
+    """리랭킹 결과: 질문에 답하는 데 필요한 후보 번호(중요한 순)."""
+
+    selected: list[int] = Field(description="질문에 답하는 데 필요한 후보 번호. 중요한 순서. 필요한 것이 없으면 빈 목록")
+
+
+RERANK_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "너는 검색 결과 리랭커다. 후보 문서 조각 중 질문에 답하는 데 실제로 필요한 것만 골라 중요한 순서로 번호를 적는다. "
+               "최대 {k}개. 질문과 상관없는 조각은 넣지 않는다."),
+    ("human", "질문: {query}\n\n후보:\n{candidates}"),
+])
+
+
+@lru_cache(maxsize=1)
+def get_rerank_chain():
+    """LCEL 리랭킹 체인(프롬프트 | Haiku 4.5 구조화 출력)을 한 번만 만든다."""
+    from langchain_aws import ChatBedrockConverse
+
+    model = ChatBedrockConverse(model_id=os.environ.get("RERANK_MODEL_ID", RERANK_MODEL_ID_DEFAULT),
+                                region_name=os.environ.get("AWS_REGION"), temperature=0, max_tokens=256)
+    return RERANK_PROMPT | model.with_structured_output(RerankResult)
+
+
+def rerank(query: str, docs: list[Document], k: int = TOP_K) -> list[Document]:
+    """후보 조각을 LLM으로 다시 골라 최대 k개를 돌려준다. 실패하면 원래 순서의 앞 k개를 돌려준다."""
+    if len(docs) <= 1:
+        return docs[:k]
+    candidates = "\n\n".join(f"[{i}] {d.page_content[:600]}" for i, d in enumerate(docs))
+    try:
+        picked = get_rerank_chain().invoke({"query": query, "candidates": candidates, "k": k}).selected
+        chosen = [docs[i] for i in dict.fromkeys(picked) if 0 <= i < len(docs)][:k]
+        return chosen or docs[:1]  # 하나도 안 고르면 1위 하나만 남겨 "문서에 없음" 판단에 쓰게 한다
+    except Exception as exc:  # 리랭킹이 안 되면 하이브리드 순서를 그대로 쓴다
+        print(f"[retriever] 리랭킹 실패, 하이브리드 순서를 씁니다: {type(exc).__name__}")
+        return docs[:k]
 
 
 def _parse_front_matter(text: str) -> tuple[dict, str]:
@@ -108,7 +149,7 @@ def retrieve_docs(query: str) -> dict:
     답변에는 결과의 문서명(title)을 출처로 인용한다. 결과에 답이 없으면 지어내지 말고
     "준비된 문서에 없는 내용"이라고 안내하고 국세청 등 공식 채널 확인을 권한다.
     """
-    docs = get_retriever().search(query)
+    docs = rerank(query, get_retriever().search(query, k=CANDIDATE_K))
     return {
         "query": query,
         "results": [

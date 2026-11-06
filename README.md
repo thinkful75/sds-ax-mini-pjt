@@ -5,7 +5,7 @@
 
 ## 활용한 패턴 (Day 1~7)
 - Day 1: LCEL chain (Pydantic 구조화 출력) — 숫자 검사에 걸린 답변을 `ChatPromptTemplate | model.with_structured_output(RevisedAnswer)` 체인으로 다시 쓰고(`src/agent.py`), API 응답은 Pydantic `QueryResponse{answer, contexts[doc_id,text], trace[step,input,output]}`로 반환(`src/api.py`)
-- Day 2: RAG (하이브리드 검색) — Chroma + Titan 임베딩과 BM25를 RRF로 합친 `retrieve_docs`. 임베딩이 막히면 BM25만으로 동작
+- Day 2: RAG (하이브리드 검색·리랭킹) — Chroma + Titan 임베딩과 BM25를 RRF로 합쳐 후보 8개를 뽑고, Haiku 4.5 LCEL 체인이 질문에 필요한 조각만 최대 3개 골라 `retrieve_docs`로 돌려줌. 임베딩이 막히면 BM25만, 리랭킹이 막히면 RRF 순서로 동작
 - Day 3: ReAct (도구 자율 선택) — `create_agent` + Bedrock `ChatBedrockConverse`(Claude Sonnet 4.6)가 질문에 맞는 렌즈·도구를 스스로 고름
 - Day 4: 도구 다중 — `get_portfolio`, `build_view`, `retrieve_docs`를 한 질의에서 결합(예: 양도세 질문 = `retrieve_docs` + `build_view`, "원화로 하면 얼마야? 그리고 통화별로도" = `build_view` 2회)
 - Day 5: 가드레일 (입력·출력 필터링) — 입력: 프롬프트 인젝션은 모델 호출 전에 차단(`input_guard`). 출력: 도구·문서에 없는 숫자를 걸러 다시 쓰기(`number_check`), 계좌번호 마스킹. 구조: 주문·이체 도구 없음
@@ -20,7 +20,7 @@ POST /query {question}  (또는 브라우저 채팅 화면 GET /)
       미들웨어: PIIMiddleware(입력·출력 계좌번호 가림) · ModelRetryMiddleware(일시 오류 재시도)
       ├─ get_portfolio()          src/tools.py      ← data/broker/*.json (Mock)
       ├─ build_view(lens, 필터)    src/tools.py      숫자 계산·반올림은 전부 여기 (pandas)
-      └─ retrieve_docs(query)     src/retriever.py  ← data/docs/*.md (Chroma + BM25 하이브리드)
+      └─ retrieve_docs(query)     src/retriever.py  ← data/docs/*.md (Chroma + BM25 하이브리드 → LLM 리랭킹)
   → src/api.py     출력 가드레일 ① 숫자 검사: 도구·문서에 없는 숫자 → LCEL 체인으로 한 번 다시 쓰기 (trace: number_check)
                                ② 계좌번호 마스킹(끝 4자리만)
   → {"answer": "...", "contexts": [{"doc_id", "text"}], "trace": [{"step", "input", "output"}]}
@@ -38,19 +38,26 @@ curl -X POST localhost:8000/query -H "Content-Type: application/json" -d '{"ques
 .venv/Scripts/python evaluation/run_eval.py --round 2       # 16문항 평가 (Mock 데이터)
 .venv/Scripts/python evaluation/run_eval.py --ragas         # 문서 질문 6개 RAGAS 지표
 ```
-- Bedrock 계정에서 Claude 모델과 `amazon.titan-embed-text-v2:0` 호출 권한이 필요하다.
+- Bedrock 계정에서 Claude 모델(Sonnet 4.6, Haiku 4.5)과 `amazon.titan-embed-text-v2:0` 호출 권한이 필요하다. 개발·평가는 `AWS_REGION=us-west-2`에서 했다.
 - 데이터는 Mock(계좌 3개, USD/KRW 1,380 고정, 기준시각 2026-11-06 15:30)이다. 실계좌 정보는 저장소에 없다.
 
 ## RAGAS 평가 결과
-- context_recall: 0.92
-- context_precision: 0.60
-- faithfulness: 0.75
-- answer_relevancy: 0.38
+- context_recall: 1.00
+- context_precision: 0.76
+- faithfulness: 0.84
+- answer_relevancy: 0.44
 
-문서 질문 6개(평가셋 6·9·12번 + 추가 3개)의 평균이다. ragas 0.4.3, 채점 모델 Claude Haiku 4.5(답변 모델과 분리), 임베딩 Titan v2. 정답 문장은 `evaluation/expected_values.json`의 `ragas`, 문항별 점수는 `evaluation/ragas_results.json`.
-- **검색은 잘 됨**: 필요한 문서 조각은 대부분 가져온다(recall 0.92). 다만 다른 문서 조각도 함께 올라와 precision이 낮다.
-- **answer_relevancy가 낮은 이유**: 9번(연금저축)은 설계대로 "문서에 없는 내용"이라고 답해 0점이고, 나머지도 기준시각·출처·주의사항을 붙인 긴 한국어 답변이라 답변에서 거꾸로 만든 질문과 원래 질문의 유사도가 낮게 나온다.
-- **faithfulness가 목표(0.8)에 못 미친 이유**: 9번은 문서에 없는 공식 채널(홈택스 등)을 안내해 0.3, 배당 질문(r1)은 문서 밖 일반 설명이 섞여 0.54였다. 개선 후보는 2차 보고서 7장.
+문서 질문 6개(평가셋 6·9·12번 + 추가 3개)의 평균이다. ragas 0.4.3, 채점 모델 Claude Haiku 4.5(답변 모델과 분리), 임베딩 Titan v2. 정답 문장은 `evaluation/expected_values.json`의 `ragas`, 문항별 점수와 답변 원문은 `evaluation/ragas_results.json`.
+
+| 단계 | recall | precision | faithfulness | relevancy |
+|---|---|---|---|---|
+| 처음 (하이브리드 상위 3개) | 0.92 | 0.60 | 0.75 | 0.38 |
+| + 문서 질문 답변 규칙 (문서 내용만, 첫 문장에 바로 답) | 0.92 | 0.49 | 0.79 | 0.39 |
+| + LLM 리랭킹 (후보 8개 → 필요한 조각만 최대 3개) | **1.00** | **0.76** | **0.84** | 0.44 |
+
+- **리랭킹 효과가 가장 컸다**: 배당 질문(r1)에서 엉뚱한 양도세 조각이 빠지고 필요한 조각만 남아 recall·precision·faithfulness가 함께 올랐다.
+- **answer_relevancy가 낮은 이유**: 9번(연금저축)은 설계대로 "문서에 없는 내용"이라고 답해 0점이고, 12번처럼 보유 숫자·세금 설명·주의사항을 함께 담은 긴 답변은 답변에서 거꾸로 만든 질문과 원래 질문의 유사도가 낮게 나온다.
+- **표본이 6개라 실행마다 문항별 점수가 ±0.2 정도 흔들린다**: "답변 끝 기능 목록 금지" 규칙은 평균이 오르지 않아 되돌렸다(2차 보고서 8장).
 
 ## 인-아웃 세트 통과율 (자체 평가)
 - 1차 (Day 9 종료): 14 / 16 통과 (`evaluation/round1_report.md`)
@@ -67,14 +74,15 @@ curl -X POST localhost:8000/query -H "Content-Type: application/json" -d '{"ques
 - **남은 한계 · 향후 개선 방향**
   - 숫자 검사는 "같은 숫자가 근거에 있는가"만 본다. 직접 계산한 값이 우연히 도구 숫자와 같으면 통과한다.
   - 금지 항목이 설명형 문장이라 자동 채점으로는 거의 안 잡힌다. LLM-as-Judge로 보강할 수 있다.
-  - RAGAS faithfulness 0.75: 문서에 없는 안내(공식 채널 등)를 덧붙이는 습관. 시스템 프롬프트에 "문서 질문은 문서 내용만" 규칙을 더하는 것이 다음 개선 후보.
+  - RAGAS answer_relevancy 0.44: "문서에 없음" 답변과 긴 복합 답변에서 낮다. 표본(6개)을 늘려 흔들림을 줄이는 것이 먼저다.
+  - 오늘 강의 계정의 하루 토큰 한도에 여러 번 걸렸다(us-east-1의 Sonnet 4.6). 리전을 us-west-2로 옮겨 계속했다.
   - ragas 0.4.3이 최신 langchain-community와 맞지 않아(Vertex AI 모듈 import), 채점 스크립트에서 빈 자리표시 모듈로 우회했다.
   - 한국투자증권 실계좌 연결, 거래내역 기반 실현손익 렌즈, LangSmith·LangFuse 트레이스 연결
 
 ## 핵심 코드 위치
-- `src/agent.py:90` — 메인 에이전트 그래프 `get_agent()` (create_agent + 도구 3개 + 미들웨어)
-  - `src/agent.py:29` 시스템 프롬프트 · `:76` 미들웨어(PII·재시도) · `:110` LCEL 다시 쓰기 체인 · `:138` `run_query()`(contexts·trace 생성)
+- `src/agent.py:91` — 메인 에이전트 그래프 `get_agent()` (create_agent + 도구 3개 + 미들웨어)
+  - `src/agent.py:29` 시스템 프롬프트 · `:76` 미들웨어(PII·재시도) · `:111` LCEL 다시 쓰기 체인 · `:139` `run_query()`(contexts·trace 생성)
 - `src/tools.py` — 도메인 도구: `:177` `get_portfolio`, `:200` `build_view`, `:113` 렌즈 집계 `compute_view`
-- `src/retriever.py` — RAG 파이프라인: `:61` 하이브리드 검색 `HybridRetriever`, `:104` `retrieve_docs`
+- `src/retriever.py` — RAG 파이프라인: `:102` 하이브리드 검색 `HybridRetriever`, `:45` LLM 리랭킹 `rerank`, `:145` `retrieve_docs`
 - `src/api.py` — `:155` `POST /query`, `:126` 입력·출력 가드레일 흐름 `answer_question()`, `:105` 숫자 검사, `:201` 채팅 화면
 - `evaluation/run_eval.py` — `:85` 16문항 채점, `:135` RAGAS. 정답 숫자는 `evaluation/expected_values.json`

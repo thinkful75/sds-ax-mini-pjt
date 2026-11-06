@@ -58,7 +58,8 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 .venv/Scripts/python evaluation/run_eval.py --ragas              # 문서 질문 6개 RAGAS (채점 모델 JUDGE_MODEL_ID)
 ```
 
-- 모델은 `.env`의 `BEDROCK_MODEL_ID`(현재 `us.anthropic.claude-sonnet-4-6`)를 쓴다. 강의 계정은 `us.` 추론 프로필 ID로만 호출되고 Sonnet 4.6, Sonnet 4.5, Haiku 4.5만 허용된다. 임베딩은 `amazon.titan-embed-text-v2:0`.
+- 모델은 `.env`의 `BEDROCK_MODEL_ID`(현재 `us.anthropic.claude-sonnet-4-6`)를 쓴다. 강의 계정은 `us.` 추론 프로필 ID로만 호출되고 Sonnet 4.6, Sonnet 4.5, Haiku 4.5만 허용된다. 임베딩은 `amazon.titan-embed-text-v2:0`. RAGAS 채점(`JUDGE_MODEL_ID`)과 검색 리랭킹(`RERANK_MODEL_ID`)은 Haiku 4.5.
+- 리전은 `us-west-2`를 쓴다. us-east-1은 하루 토큰 한도(ThrottlingException: Too many tokens per day)에 자주 걸렸고, us-east-2는 Claude 호출 권한이 없다.
 - 액세스 키가 AKIA로 시작하는 장기 자격 증명이라 `AWS_SESSION_TOKEN`은 비워 둔다. 코드가 빈 값을 지운다.
 - Windows 콘솔에서 한글이 깨지면 `PYTHONIOENCODING=utf-8`을 붙이거나 출력을 파일로 받아 읽는다.
 
@@ -69,7 +70,7 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 파일 구성(정해진 3개 + 추가 2개, 그 밖의 파일은 요청 없이 만들지 않는다):
 - `src/agent.py`: 에이전트와 시스템 프롬프트. `python src/agent.py`로 시험 질문을 실행할 수 있게 한다.
 - `src/tools.py`: `get_portfolio()`와 `build_view(lens, filter)`. `data/broker/*.json`을 직접 읽는다.
-- `src/retriever.py`: `retrieve_docs(query)`. `data/docs/*.md` 대상 Chroma + BM25 하이브리드 검색. 각 문서 머리에 `doc_id`/`title`이 있고, 답변은 문서명을 인용해야 한다.
+- `src/retriever.py`: `retrieve_docs(query)`. `data/docs/*.md` 대상 Chroma + BM25 하이브리드 검색으로 후보 8개를 뽑고 Haiku 4.5 리랭킹으로 최대 3개를 돌려준다. 각 문서 머리에 `doc_id`/`title`이 있고, 답변은 문서명을 인용해야 한다.
 - `src/api.py`: `POST /query`와 `/` 채팅 화면. 출력 검사로 근거 없는 숫자를 걸러 다시 쓰게 하고, 답변에 남은 계좌번호 패턴을 끝 4자리만 남기고 가린다.
 - `evaluation/run_eval.py`: 채점 스크립트.
 

@@ -25,7 +25,7 @@
 |---|---|
 | `get_portfolio` | – → 계좌 목록(계좌번호 끝 4자리만), 보유 종목(수량·평균단가·통화·자산군·섹터), 현재가·USD/KRW 환율·기준시각 |
 | `build_view` | lens(account / asset_class / currency / sector / symbol), 필터(account_id / broker / account_type) → 항목별 매입금액·평가금액·평가손익·수익률·비중과 합계. 숫자 반올림은 여기서 한 번만 |
-| `retrieve_docs` | query → 세금·계좌 제도·용어 문서 조각과 문서명 (Chroma + BM25 하이브리드 검색) |
+| `retrieve_docs` | query → 세금·계좌 제도·용어 문서 조각과 문서명 (Chroma + BM25 하이브리드 검색 후 LLM 리랭킹으로 최대 3개) |
 
 **데이터 소스**
 - 평가용 계좌 3개(A증권 일반 위탁 KRW, A증권 ISA KRW, B증권 해외주식 USD), 보유 종목 8개, 시세: `data/broker/*.json` — **가짜(Mock)** 데이터. 정답 숫자를 고정해 평가를 재현하기 위함. 종목별 자산군·섹터도 이 파일에 함께 적었다
@@ -51,4 +51,4 @@
 - RAGAS: faithfulness 0.8 이상 (문서 질문 기준)
 - **"쓸만하다"의 기준**: 월말 엑셀 통합 작업(약 30분)을 질문 3개로 대체할 수 있다
 
-**현재 결과 (Day 10)**: 1차 14/16 → 2차 16/16, guardrail 3/3. 렌즈 숫자는 정답과 불일치 0건. RAGAS(문서 질문 6개) context_recall 0.92 · context_precision 0.60 · faithfulness 0.75 · answer_relevancy 0.38로 faithfulness 목표 0.8에는 못 미쳤다. 자세한 내용은 `evaluation/round2_report.md` 7장.
+**현재 결과 (Day 10)**: 1차 14/16 → 2차 16/16, guardrail 3/3. 렌즈 숫자는 정답과 불일치 0건. RAGAS(문서 질문 6개)는 처음 faithfulness 0.75였고, 문서 답변 규칙과 LLM 리랭킹을 더해 context_recall 1.00 · context_precision 0.76 · faithfulness 0.84 · answer_relevancy 0.44로 faithfulness 목표 0.8을 넘었다. 자세한 내용은 `evaluation/round2_report.md` 7·8장.
