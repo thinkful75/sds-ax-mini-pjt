@@ -156,7 +156,8 @@ def run_ragas() -> None:
         contexts = [c["text"] for c in result["contexts"]] or ["(검색된 근거 없음)"]
         samples.append({"user_input": s["question"], "retrieved_contexts": contexts,
                         "response": result["answer"], "reference": s["reference"]})
-        rows.append({"id": s["id"], "question": s["question"], "steps": [t["step"] for t in result["trace"]]})
+        rows.append({"id": s["id"], "question": s["question"], "steps": [t["step"] for t in result["trace"]],
+                     "answer": result["answer"], "context_doc_ids": [c["doc_id"][:60] for c in result["contexts"]]})
         print(f"[답변 생성] {s['id']:>2} {s['question']}", flush=True)
 
     metrics = [LLMContextRecall(), LLMContextPrecisionWithReference(), Faithfulness(), ResponseRelevancy()]

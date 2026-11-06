@@ -34,8 +34,7 @@ SYSTEM_PROMPT = """너는 PortfolioLens다. 사용자 본인의 여러 증권 �
 - 숫자를 말할 때는 데이터 기준시각(as_of)을 함께 적는다. 달러 금액을 원화로 말할 때는 적용 환율도 적는다.
 - 질문에 맞는 렌즈를 고른다. 기준이 애매하면(예: "제일 많이 쏠린 게 뭐야?") 종목(symbol)과 섹터(sector) 두 관점을 모두 조회해 구분해서 답한다.
 - 한 문장에 요청이 여러 개면 빠짐없이 모두 답한다.
-- 세금·계좌 제도·용어 질문은 retrieve_docs로 문서를 찾고, 답변에 문서명을 출처로 적는다. 문서에 없는 내용이면 지어내지 말고 "준비된 문서에 없는 내용"이라고 말한 뒤 국세청 등 공식 채널 확인을 권한다.
-- 세금 관련 답은 일반 정보로만 말하고, 확정 세액을 단정하지 않는다. 해외주식 양도세는 팔아야 과세된다는 점을 함께 설명한다.
+- 세금·계좌 제도·용어 질문은 retrieve_docs로 문서를 찾고, 답변에 문서명을 출처로 적는다. 문서에 없는 내용이면 지어내지 말고 "준비된 문서에 없는 내용"이라고 말한 뒤 국세청 등 공식 채널 확인을 권한다.- 세금 관련 답은 일반 정보로만 말하고, 확정 세액을 단정하지 않는다. 해외주식 양도세는 팔아야 과세된다는 점을 함께 설명한다.
 - 합계가 필요한 질문은 종목별 값을 나열하는 데서 끝내지 말고, 합계가 나오는 렌즈·필터로 다시 조회해 그 total 값을 인용한다. 예: 미국 주식 양도세 수준을 물으면 build_view(lens="account", broker="B증권")의 total 평가손익(원화)을 기본공제 250만 원과 나란히 보여준다.
 - 표가 도움이 되면 마크다운 표를 쓴다. 답은 한국어로 한다.
 
@@ -77,12 +76,13 @@ def build_middleware() -> list:
     """에이전트 미들웨어 목록을 만든다.
 
     - PIIMiddleware: 사용자가 입력한 계좌번호를 모델에 넘기기 전에 가리고(입력), 모델 답변에 계좌번호가 나오면 가린다(출력)
-    - ModelRetryMiddleware: Bedrock 일시 오류(스로틀링 등)가 나면 간격을 늘려 가며 2번까지 다시 부른다
+    - ModelRetryMiddleware: Bedrock 일시 오류(스로틀링 등)가 나면 간격을 늘려 가며 2번까지 다시 부른다.
+      끝내 실패하면 오류 문구를 답변으로 내보내지 않고 예외를 올린다(on_failure="error")
     """
     return [
         PIIMiddleware("account_number", detector=detect_account_numbers, strategy="redact",
                       apply_to_input=True, apply_to_output=True),
-        ModelRetryMiddleware(max_retries=2, initial_delay=2.0),
+        ModelRetryMiddleware(max_retries=2, initial_delay=2.0, on_failure="error"),
     ]
 
 
