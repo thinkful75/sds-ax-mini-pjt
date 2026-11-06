@@ -118,9 +118,9 @@ evaluation/round1_report.md · round2_report.md
 
 | 문서 | 바꿀 내용 |
 |---|---|
-| `evaluation/test_queries.csv` | (완료) `expected_tools`에서 예전 도구 이름을 뺐다. 숫자 질문은 `build_view`만, 연결 범위 질문(7번)은 `get_portfolio`를 기대한다. `build_view`가 데이터를 직접 읽어 숫자 질문에는 `get_portfolio`가 필요 없기 때문이다 |
-| `SERVICE.md` | 3장 MCP 서버 설명과 도구 표를 도구 3개 구성으로 바꾼다. 5장 RAGAS를 "여유 시"로 바꾼다. QA에서 지적된 빈칸(범위 밖 질문 정책, Mock 고정값 등)을 채운다 |
-| `CLAUDE.md` | 아키텍처 섹션의 MCP·Provider 경로를 위 파일 구성으로 바꾼다 |
+| `evaluation/test_queries.csv` | (완료) `expected_tools`에서 예전 도구 이름을 뺐다. 숫자 질문은 `build_view`만 기대한다. 연결 범위 질문(7번)은 처음에 `get_portfolio`를 기대했으나, 도구 없이도 안내할 수 있어 Day 10에 비웠다(`round2_report.md` 3장). `build_view`가 데이터를 직접 읽어 숫자 질문에는 `get_portfolio`가 필요 없기 때문이다 |
+| `SERVICE.md` | (완료) 3장을 도구 3개 구성으로 바꾸고 MCP를 쓰지 않은 이유를 적었다. MCP 전환 조건은 2장 확장 관점에 남겼다. 5장 RAGAS를 "여유 시"로 바꿨다. 범위 밖 질문 정책과 Mock 고정값을 채웠다 |
+| `CLAUDE.md` | (완료) 아키텍처 섹션의 MCP·Provider 경로를 위 파일 구성으로 바꿨다 |
 
 ## 8. 리스크와 대응
 
