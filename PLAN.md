@@ -7,7 +7,7 @@
 
 | 항목 | 결정 | 이유 |
 |---|---|---|
-| 데이터 연결 | 일반 도구(`src/tools.py`)로 먼저. MCP는 Day 10에 여유가 있을 때만 | 강의 자료에 MCP 필수 조건 없음. API가 명확해 MCP 없이도 충분 |
+| 데이터 연결 | 일반 도구(`src/tools.py`). MCP는 쓰지 않는다(Day 10 확정) | 강의 자료에 MCP 필수 조건 없음. 에이전트가 하나라 MCP의 이득(클라이언트 공유, 키 격리)보다 별도 프로세스·디버깅 비용이 큼. 전환 조건은 `SERVICE.md` 2장 |
 | 도구 수 | 3개 (`get_portfolio`, `build_view`, `retrieve_docs`) | 강의 권장 "처음엔 도구 2~3개, 데이터 1~2종" |
 | 실계좌 | Mock으로 먼저 전체를 돌리고, 한국투자증권 실계좌는 나중에 데모용으로 | 강의 권장 "더미 데이터로 우선 진행". 평가는 어차피 Mock |
 | 파일 구성 | 정해진 3개 파일 + `src/api.py`, `evaluation/run_eval.py`만 추가 | 강의 예시처럼 데이터 읽기는 도구 안에서, 가드레일은 시스템 프롬프트와 도구 설계로 |
@@ -26,14 +26,15 @@
                           ├─ build_view(lens, filter) ← 숫자 계산은 전부 여기  (src/tools.py, pandas)
                           └─ retrieve_docs(query)     ◀── data/docs/*.md       (src/retriever.py)
                                       │
-                         src/api.py  답변 속 계좌번호 패턴 마스킹(끝 4자리만)
+                         src/api.py  ① 출력 숫자 검사(도구·문서에 없는 숫자 → 한 번 다시 쓰기, Day 10 추가)
+                                     ② 답변 속 계좌번호 패턴 마스킹(끝 4자리만)
                                       │
                          {answer, contexts, trace}
 ```
 
 - **조회 전용은 구조로 보장한다.** 주문·이체 도구를 만들지 않는다.
 - **계좌번호 마스킹은 두 겹이다.** 도구가 처음부터 끝 4자리만 돌려주고, `api.py`가 답변에 남은 계좌번호 패턴을 한 번 더 가린다(케이스 15).
-- **`trace`는 이번 요청의 도구 호출 기록이다.** 도구 이름, 입력, 결과 요약을 담는다. LangFuse 연결은 여유 시 붙인다.
+- **`trace`는 이번 요청의 도구 호출 기록이다.** 도구 이름, 입력, 결과를 담고, 출력 숫자 검사가 작동하면 `number_check`가 덧붙는다. LangFuse 연결은 여유 시 붙인다.
 
 ## 2. 도구 설계 (`src/tools.py`, `src/retriever.py`)
 
@@ -52,10 +53,10 @@
 src/agent.py            에이전트 + 시스템 프롬프트. python src/agent.py 로 시험 질문 실행
 src/tools.py            get_portfolio, build_view (data/broker/*.json 읽기 포함)
 src/retriever.py        retrieve_docs (RAG)
-src/api.py              POST /query → answer, contexts, trace (+ 계좌번호 마스킹)
-data/broker/*.json      Mock 계좌 3개
-data/docs/*.md          RAG 문서 4개 (작성 완료)
-evaluation/test_queries.csv     인-아웃 세트 16건 (작성 완료, expected_tools 수정 필요)
+src/api.py              POST /query → answer, contexts, trace (+ 출력 숫자 검사, 계좌번호 마스킹), GET / 채팅 화면
+data/broker/*.json      Mock 계좌 3개 + 시세(quotes.json)
+data/docs/*.md          RAG 문서 4개
+evaluation/test_queries.csv     인-아웃 세트 16건 (expected_tools 수정 완료)
 evaluation/expected_values.json 렌즈별 정답 숫자
 evaluation/run_eval.py          채점 스크립트
 evaluation/round1_report.md · round2_report.md
@@ -109,10 +110,10 @@ evaluation/round1_report.md · round2_report.md
 
 | 시간 | 할 일 | 완료 기준 |
 |---|---|---|
-| 오전 | 개선 루프(한 번에 하나씩, 3회) → 2차 평가 → `round2_report.md` | 통과율 90% 목표, guardrail 100% |
-| 오전 | 여유 시: 실계좌 데모 연결, RAGAS, LangFuse, MCP 전환 | 선택 |
+| 오전 | 개선 루프(한 번에 하나씩, 3회) → 2차 평가 → `round2_report.md` | ✅ 16/16, guardrail 3/3. 출력 숫자 검사 추가 |
+| 오전 | 여유 시: 실계좌 데모 연결, RAGAS, LangFuse | 선택 (MCP 전환은 하지 않기로 결정) |
 | 오후 | 시연 캡처(통합 합계 · 렌즈 전환 · 가드레일 거절, Mock 데이터로) · `requirements.txt` · 새 환경에서 실행 확인 | 새 venv로 실행 성공 |
-| 마감 | GitHub public push → 제출 (15:00 마감, 초안 기준이므로 확인 필요) | ✅ |
+| 마감 | GitHub public push → 제출 (15:00 마감, 초안 기준이므로 확인 필요) | push 완료(https://github.com/thinkful75/sds-ax-mini-pjt), 제출 남음 |
 
 ## 7. 다른 문서에 반영할 것
 
@@ -126,7 +127,7 @@ evaluation/round1_report.md · round2_report.md
 
 | 리스크 | 대응 |
 |---|---|
-| LLM이 숫자를 직접 계산·반올림해서 틀림 | 시스템 프롬프트에 "숫자는 build_view 결과를 그대로 인용" + 채점에서 정답과 비교 |
+| LLM이 숫자를 직접 계산·반올림해서 틀림 | 시스템 프롬프트에 "숫자는 build_view 결과를 그대로 인용" + 채점에서 정답과 비교. 프롬프트만으로는 막히지 않아(12번 과세표준) `api.py` 출력 숫자 검사를 추가 |
 | 렌즈를 잘못 고름 (예: "쏠림" → 계좌별) | 도구 docstring에 렌즈별 예시 질문 |
 | 평가셋 문항에만 맞춰 고침 | 루프가 끝나면 문항 밖 질문을 직접 몇 개 던져 본다 |
 | 한 번에 여러 개를 고쳐 원인을 모름 | 루프에서 한 번에 하나만 고치고, 바퀴마다 git 커밋 |

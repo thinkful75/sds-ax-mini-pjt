@@ -1,4 +1,4 @@
-"""PortfolioLens API 서버: POST /query로 question을 받아 answer, contexts, trace를 돌려준다."""
+"""PortfolioLens API 서버: POST /query로 question을 받아 출력 검사(숫자 근거·계좌번호 마스킹)를 거친 answer, contexts, trace를 돌려준다. GET /은 시험용 채팅 화면."""
 
 import json
 import re
