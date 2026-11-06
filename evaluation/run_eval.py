@@ -6,7 +6,11 @@
 3. 숫자: 문항별 핵심 숫자가 expected_values.json 정답과 맞게 답변에 나왔는가(금액 상대오차 ±0.1%, % 는 ±0.1%p)
 expected_traits는 자동 채점이 어려우므로 답변과 나란히 결과 파일에 남겨 사람이 확인한다.
 
+RAGAS(--ragas): expected_values.json의 문서 질문 6개를 에이전트에 넣고 context_recall · context_precision ·
+faithfulness · answer_relevancy를 낸다. 채점 모델은 .env의 JUDGE_MODEL_ID(기본 Haiku 4.5), 임베딩은 Titan.
+
 사용법: python evaluation/run_eval.py --round 1 [--ids 1,2,3]
+        python evaluation/run_eval.py --ragas
 """
 
 import argparse
@@ -81,7 +85,7 @@ def check_numbers(case_id: str, answer: str) -> tuple[bool, list[str]]:
 def check_case(row: dict, result: dict) -> dict:
     """문항 하나를 자동 채점한다."""
     answer = result["answer"]
-    called = [t["tool"] for t in result["trace"]]
+    called = [t["step"] for t in result["trace"]]
     expected_tools = [t for t in row["expected_tools"].split(";") if t]
     tools_ok = all(t in called for t in expected_tools)
 
@@ -100,8 +104,78 @@ def check_case(row: dict, result: dict) -> dict:
         "forbidden_ok": forbidden_ok, "forbidden_hits": forbidden_hits,
         "numbers_ok": numbers_ok, "missing_numbers": missing,
         "expected_traits": row["expected_traits"], "forbidden": row["forbidden"],
-        "answer": answer,
+        "answer": answer, "contexts": result["contexts"], "trace": result["trace"],
     }
+
+
+def _import_ragas():
+    """RAGAS를 불러온다.
+
+    ragas 0.4.3은 langchain-community의 Vertex AI 모듈을 바로 import하는데, 설치된 langchain-community 0.4.x에는
+    그 모듈이 없다. 이 프로젝트는 Vertex AI를 쓰지 않으므로 빈 자리표시 모듈을 끼워 넣고 불러온다.
+    """
+    import types
+
+    import langchain_community.llms as community_llms
+
+    for name, attr in [("langchain_community.chat_models.vertexai", "ChatVertexAI"),
+                       ("langchain_community.llms.vertexai", "VertexAI")]:
+        try:
+            __import__(name)
+        except ImportError:
+            stub = types.ModuleType(name)
+            setattr(stub, attr, type(attr, (), {}))
+            sys.modules[name] = stub
+    if not hasattr(community_llms, "VertexAI"):
+        community_llms.VertexAI = sys.modules["langchain_community.llms.vertexai"].VertexAI
+    import ragas
+    return ragas
+
+
+def run_ragas() -> None:
+    """문서 질문 6개로 RAGAS 4개 지표를 계산해 출력하고 evaluation/ragas_results.json에 저장한다."""
+    import os
+    import warnings
+
+    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    ragas = _import_ragas()
+    from langchain_aws import BedrockEmbeddings, ChatBedrockConverse
+    from ragas.embeddings import LangchainEmbeddingsWrapper
+    from ragas.llms import LangchainLLMWrapper
+    from ragas.metrics import Faithfulness, LLMContextPrecisionWithReference, LLMContextRecall, ResponseRelevancy
+
+    region = os.environ["AWS_REGION"]
+    judge = LangchainLLMWrapper(ChatBedrockConverse(
+        model_id=os.environ.get("JUDGE_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0"),
+        region_name=region, temperature=0, max_tokens=4096))
+    embeddings = LangchainEmbeddingsWrapper(BedrockEmbeddings(model_id="amazon.titan-embed-text-v2:0", region_name=region))
+
+    samples, rows = [], []
+    for s in EXPECTED["ragas"]["samples"]:
+        result = answer_question(s["question"])
+        contexts = [c["text"] for c in result["contexts"]] or ["(검색된 근거 없음)"]
+        samples.append({"user_input": s["question"], "retrieved_contexts": contexts,
+                        "response": result["answer"], "reference": s["reference"]})
+        rows.append({"id": s["id"], "question": s["question"], "steps": [t["step"] for t in result["trace"]]})
+        print(f"[답변 생성] {s['id']:>2} {s['question']}", flush=True)
+
+    metrics = [LLMContextRecall(), LLMContextPrecisionWithReference(), Faithfulness(), ResponseRelevancy()]
+    scores = ragas.evaluate(ragas.EvaluationDataset.from_list(samples), metrics=metrics,
+                            llm=judge, embeddings=embeddings, show_progress=False)
+    frame = scores.to_pandas()
+    names = {"context_recall": "context_recall", "llm_context_precision_with_reference": "context_precision",
+             "faithfulness": "faithfulness", "answer_relevancy": "answer_relevancy"}
+    summary = {label: round(float(frame[col].mean()), 2) for col, label in names.items() if col in frame}
+    for row, (_, rec) in zip(rows, frame.iterrows()):
+        row.update({label: (None if rec[col] != rec[col] else round(float(rec[col]), 2))
+                    for col, label in names.items() if col in frame})
+
+    out = EVAL_DIR / "ragas_results.json"
+    out.write_text(json.dumps({"summary": summary, "samples": rows,
+                               "judge_model": os.environ.get("JUDGE_MODEL_ID", "us.anthropic.claude-haiku-4-5-20251001-v1:0")},
+                              ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print("\nRAGAS 평균:", summary)
+    print("결과 파일:", out.relative_to(ROOT))
 
 
 def main() -> None:
@@ -109,7 +183,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--round", default="1")
     parser.add_argument("--ids", default="", help="일부 문항만 돌릴 때 쉼표로 구분한 id")
+    parser.add_argument("--ragas", action="store_true", help="문서 질문으로 RAGAS 지표만 계산한다")
     args = parser.parse_args()
+    if args.ragas:
+        run_ragas()
+        return
 
     rows = list(csv.DictReader((EVAL_DIR / "test_queries.csv").open(encoding="utf-8")))
     if args.ids:

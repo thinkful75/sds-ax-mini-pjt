@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -12,8 +13,11 @@ if __package__ in (None, ""):  # python src/agent.py 로 바로 실행할 때도
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from langchain.agents import create_agent
+from langchain.agents.middleware import ModelRetryMiddleware, PIIMatch, PIIMiddleware
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
 
 from src.retriever import retrieve_docs
 from src.tools import TOOLS
@@ -56,24 +60,64 @@ def build_model() -> ChatBedrockConverse:
     )
 
 
+# 하이픈으로 이어진 숫자 묶음(예: 110-123-456789) 또는 하이픈 없는 숫자 중 숫자가 10자리 이상인 것을 계좌번호로 본다
+ACCOUNT_CANDIDATE = re.compile(r"(?<![\d*])\d{2,6}(?:-\d{2,8}){1,3}(?!\d)|(?<![\d,.*])\d{10,}(?![\d,])")
+
+
+def detect_account_numbers(text: str) -> list[PIIMatch]:
+    """PII 미들웨어용 감지기: 숫자가 10자리 이상인 계좌번호 형태를 찾는다(날짜 2026-11-06 같은 8자리는 제외)."""
+    return [
+        PIIMatch(type="account_number", value=m.group(0), start=m.start(), end=m.end())
+        for m in ACCOUNT_CANDIDATE.finditer(text)
+        if len(re.sub(r"\D", "", m.group(0))) >= 10
+    ]
+
+
+def build_middleware() -> list:
+    """에이전트 미들웨어 목록을 만든다.
+
+    - PIIMiddleware: 사용자가 입력한 계좌번호를 모델에 넘기기 전에 가리고(입력), 모델 답변에 계좌번호가 나오면 가린다(출력)
+    - ModelRetryMiddleware: Bedrock 일시 오류(스로틀링 등)가 나면 간격을 늘려 가며 2번까지 다시 부른다
+    """
+    return [
+        PIIMiddleware("account_number", detector=detect_account_numbers, strategy="redact",
+                      apply_to_input=True, apply_to_output=True),
+        ModelRetryMiddleware(max_retries=2, initial_delay=2.0),
+    ]
+
+
 @lru_cache(maxsize=1)
 def get_agent():
     """에이전트를 처음 한 번만 만들고 재사용한다."""
-    return create_agent(build_model(), tools=ALL_TOOLS, system_prompt=SYSTEM_PROMPT)
+    return create_agent(build_model(), tools=ALL_TOOLS, system_prompt=SYSTEM_PROMPT, middleware=build_middleware())
 
 
-REVISE_PROMPT = """아래 답변에는 도구 결과나 문서에 없는 숫자가 들어 있다: {numbers}
-이 숫자들은 직접 계산하거나 추정한 값이라 쓸 수 없다. 이 숫자와 그 숫자를 만드는 계산식·표 행·문장을 지워라.
-나머지 내용과 형식은 그대로 두고, 새 숫자는 넣지 마라. 다시 쓴 답변만 출력하라.
+class RevisedAnswer(BaseModel):
+    """숫자 검사에 걸린 답변을 다시 쓴 결과(구조화 출력)."""
 
-[답변]
-{answer}"""
+    answer: str = Field(description="근거 없는 숫자와 그 계산을 지우고 다시 쓴 답변 전체")
+    removed: list[str] = Field(description="지운 숫자나 문장을 짧게 적은 목록")
 
 
-def revise_answer(answer: str, numbers: list[str]) -> str:
-    """도구 결과에 없는 숫자를 지운 답변을 모델에게 한 번 다시 쓰게 한다."""
-    reply = build_model().invoke(REVISE_PROMPT.format(numbers=", ".join(numbers), answer=answer))
-    return reply.text or answer
+REVISE_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", "너는 답변 검수자다. 지정된 숫자와 그 숫자를 만드는 계산식·표 행·문장을 지우고, "
+               "나머지 내용과 마크다운 형식은 그대로 둔다. 새 숫자는 넣지 않는다."),
+    ("human", "도구 결과나 문서에 없는 숫자: {numbers}\n\n[답변]\n{answer}"),
+])
+
+
+@lru_cache(maxsize=1)
+def get_revise_chain():
+    """LCEL 체인: 프롬프트 | 모델(Pydantic 구조화 출력). 한 번만 만들고 재사용한다."""
+    return REVISE_PROMPT | build_model().with_structured_output(RevisedAnswer)
+
+
+def revise_answer(answer: str, numbers: list[str]) -> RevisedAnswer:
+    """도구 결과에 없는 숫자를 지운 답변을 LCEL 체인으로 한 번 다시 쓰게 한다. 실패하면 원래 답변을 그대로 둔다."""
+    try:
+        return get_revise_chain().invoke({"numbers": ", ".join(numbers), "answer": answer})
+    except Exception:  # 다시 쓰기에 실패해도 응답은 나가야 한다(검사 결과는 trace에 남는다)
+        return RevisedAnswer(answer=answer, removed=[])
 
 
 def _parse_tool_output(content) -> object:
@@ -86,12 +130,18 @@ def _parse_tool_output(content) -> object:
         return content
 
 
+def _to_text(value) -> str:
+    """trace·contexts에 넣을 값을 문자열로 바꾼다(dict·list는 JSON)."""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, default=str)
+
+
 def run_query(question: str) -> dict:
     """질문 하나를 에이전트에 넣고 answer, contexts, trace를 돌려준다.
 
+    API 표준 규약(§4-2) 형식으로 만든다.
     - answer: 최종 답변 문자열
-    - contexts: 답의 근거가 된 문서 조각과 도구 결과(JSON 문자열) 목록
-    - trace: 도구 호출 기록(도구 이름, 입력, 결과)
+    - contexts: 답의 근거 목록 [{"doc_id", "text"}]. 문서 조각은 문서의 doc_id, 도구 결과는 "도구이름:입력"을 doc_id로 쓴다
+    - trace: 단계 기록 [{"step", "input", "output"}]. step은 도구 이름, input·output은 문자열(JSON)
     """
     result = get_agent().invoke({"messages": [{"role": "user", "content": question}]})
     messages = result["messages"]
@@ -103,13 +153,15 @@ def run_query(question: str) -> dict:
             for call in msg.tool_calls:
                 calls[call["id"]] = call
         elif isinstance(msg, ToolMessage):
-            call = calls.get(msg.tool_call_id, {})
+            args = calls.get(msg.tool_call_id, {}).get("args", {})
             output = _parse_tool_output(msg.content)
-            trace.append({"tool": msg.name, "input": call.get("args", {}), "output": output})
+            args_text = _to_text(args)
+            trace.append({"step": msg.name, "input": args_text, "output": _to_text(output)})
             if msg.name == "retrieve_docs" and isinstance(output, dict):
-                contexts.extend(r["content"] for r in output.get("results", []))
+                contexts.extend({"doc_id": r.get("doc_id", r.get("source", "")), "text": r["content"]}
+                                for r in output.get("results", []))
             else:
-                contexts.append(json.dumps(output, ensure_ascii=False) if not isinstance(output, str) else output)
+                contexts.append({"doc_id": f"{msg.name}:{args_text}", "text": _to_text(output)})
 
     final = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
     answer = final.text if final is not None else ""
@@ -121,5 +173,5 @@ if __name__ == "__main__":
     out = run_query(question)
     print("질문:", question)
     for t in out["trace"]:
-        print(f"[도구 호출] {t['tool']}({t['input']})")
+        print(f"[도구 호출] {t['step']}({t['input']})")
     print("답변:", out["answer"])

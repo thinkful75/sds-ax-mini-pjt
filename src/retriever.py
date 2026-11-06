@@ -112,7 +112,7 @@ def retrieve_docs(query: str) -> dict:
     return {
         "query": query,
         "results": [
-            {"title": d.metadata["title"], "section": d.metadata["section"],
+            {"doc_id": d.metadata["doc_id"], "title": d.metadata["title"], "section": d.metadata["section"],
              "source": d.metadata["source"], "content": d.page_content}
             for d in docs
         ],

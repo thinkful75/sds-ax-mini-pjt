@@ -21,6 +21,19 @@ DATE_TIME = re.compile(r"\d{4}-\d{2}-\d{2}|\d{1,2}:\d{2}|\d{4}\s*년|\d{1,2}\s*�
 # 영문자 뒤에 붙은 숫자(S&P500 등)는 이름의 일부로 보고 뺀다
 NUMBER = re.compile(r"(?<![A-Za-z\d.,])(\d[\d,]*(?:\.\d+)?)(\s*만)?(\s*%)?")
 ALWAYS_ALLOWED = {100.0}  # 비중 합계 100%
+# 입력 가드레일: 시스템 프롬프트·비밀 값 노출이나 지시 무시를 노리는 요청(프롬프트 인젝션)
+INJECTION = re.compile(
+    r"시스템\s*프롬프트|이전\s*(지시|명령|규칙)|(지시|명령|규칙)[을를]?\s*(모두\s*)?무시|"
+    r"api\s*키|앱\s*키|app\s*key|secret|접근\s*토큰|액세스\s*토큰|"
+    r"ignore\s+(all\s+|the\s+)?(previous|prior|above)|system\s*prompt|developer\s*mode|jailbreak",
+    re.IGNORECASE,
+)
+INJECTION_REPLY = """죄송합니다. 시스템 프롬프트, 내부 구현, API 키·접근 토큰 같은 보안 정보는 알려드릴 수 없고, 정해진 규칙을 무시하라는 요청도 따를 수 없습니다.
+
+대신 이런 질문은 도와드릴 수 있습니다.
+- 계좌별·자산군별·통화별·섹터별 자산 현황 (예: "계좌별로 나눠서 보여줘")
+- 여러 계좌에 나눠 산 종목 합산 (예: "삼성전자 합치면 평단 얼마야?")
+- 해외주식 양도세·배당소득세·ISA 제도 안내"""
 
 
 class QueryRequest(BaseModel):
@@ -29,12 +42,33 @@ class QueryRequest(BaseModel):
     question: str
 
 
+class Context(BaseModel):
+    """답의 근거 하나: 문서 조각이면 문서 doc_id, 도구 결과면 '도구이름:입력'."""
+
+    doc_id: str
+    text: str
+
+
+class TraceStep(BaseModel):
+    """처리 단계 하나: 도구 호출(get_portfolio·build_view·retrieve_docs) 또는 가드레일(input_guard·number_check)."""
+
+    step: str
+    input: str
+    output: str
+
+
 class QueryResponse(BaseModel):
-    """응답 본문. answer, contexts, trace 세 키로 돌려준다."""
+    """응답 본문(표준 규약 §4-2). answer, contexts, trace 세 키로 돌려준다."""
 
     answer: str
-    contexts: list[str]
-    trace: list[dict]
+    contexts: list[Context]
+    trace: list[TraceStep]
+
+
+def _step(name: str, input_value, output_value) -> dict:
+    """가드레일 단계를 trace 형식(step, input, output 문자열)으로 만든다."""
+    return {"step": name, "input": json.dumps(input_value, ensure_ascii=False),
+            "output": json.dumps(output_value, ensure_ascii=False)}
 
 
 def mask_account_numbers(text: str) -> str:
@@ -73,8 +107,8 @@ def find_unsupported_numbers(answer: str, question: str, result: dict) -> list[s
 
     표기 반올림(68,333 ↔ 68333.33)은 허용하도록 상대오차 0.05%까지 같은 숫자로 본다.
     """
-    source_text = " ".join([question, *result["contexts"],
-                            json.dumps([t["output"] for t in result["trace"]], ensure_ascii=False, default=str)])
+    source_text = " ".join([question, *(c["text"] for c in result["contexts"]),
+                            *(t["output"] for t in result["trace"])])
     sources = {v for _, v in extract_numbers(source_text)} | ALWAYS_ALLOWED
     unsupported = []
     for raw, value in extract_numbers(answer, checked_only=True):
@@ -83,19 +117,33 @@ def find_unsupported_numbers(answer: str, question: str, result: dict) -> list[s
     return unsupported
 
 
-def answer_question(question: str) -> dict:
-    """에이전트를 실행하고 출력 검사를 거쳐 응답 형식으로 돌려준다.
+def check_input(question: str) -> str | None:
+    """입력 가드레일: 프롬프트 인젝션 요청이면 걸린 문구를, 아니면 None을 돌려준다."""
+    m = INJECTION.search(question)
+    return m.group(0) if m else None
 
+
+def answer_question(question: str) -> dict:
+    """입력 검사 → 에이전트 실행 → 출력 검사를 거쳐 응답 형식으로 돌려준다.
+
+    0. 입력 검사: 프롬프트 인젝션 요청이면 모델을 부르지 않고 거절 답변을 돌려주고, trace에 input_guard로 남긴다.
+       (사용자가 입력한 계좌번호는 에이전트의 PII 미들웨어가 모델에 넘기기 전에 가린다)
     1. 숫자 검사: 도구 결과·문서에 없는 숫자가 답변에 있으면 그 숫자를 빼고 한 번 다시 쓰게 하고, trace에 number_check로 남긴다.
     2. 계좌번호 마스킹: 답변에 남은 계좌번호를 끝 4자리만 남긴다.
     """
+    blocked = check_input(question)
+    if blocked:
+        return QueryResponse(answer=INJECTION_REPLY, contexts=[], trace=[
+            _step("input_guard", {"question": question, "matched": blocked}, {"blocked": True})]).model_dump()
+
     result = run_query(question)
     unsupported = find_unsupported_numbers(result["answer"], question, result)
     if unsupported:
-        result["answer"] = revise_answer(result["answer"], unsupported)
+        revised = revise_answer(result["answer"], unsupported)
+        result["answer"] = revised.answer
         remaining = find_unsupported_numbers(result["answer"], question, result)
-        result["trace"].append({"tool": "number_check", "input": {"unsupported": unsupported},
-                                "output": {"revised": True, "remaining": remaining}})
+        result["trace"].append(_step("number_check", {"unsupported": unsupported},
+                                     {"removed": revised.removed, "remaining": remaining}))
     result["answer"] = mask_account_numbers(result["answer"])
     return QueryResponse(**result).model_dump()
 
@@ -141,7 +189,7 @@ document.getElementById('f').onsubmit=async e=>{
     const r=await fetch('/query',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
     if(!r.ok)throw new Error(await r.text());
     const j=await r.json();
-    const tools=j.trace.map(t=>t.tool).join(', ')||'없음';
+    const tools=j.trace.map(t=>t.step).join(', ')||'없음';
     d.innerHTML=marked.parse(j.answer)+'<details><summary>도구 호출: '+esc(tools)+'</summary><pre>'+esc(JSON.stringify(j.trace,null,2))+'</pre></details>';
   }catch(err){d.innerHTML='오류: '+esc(String(err.message||err))}
   b.disabled=false;q.focus();

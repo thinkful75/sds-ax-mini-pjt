@@ -11,7 +11,7 @@
 | 도구 수 | 3개 (`get_portfolio`, `build_view`, `retrieve_docs`) | 강의 권장 "처음엔 도구 2~3개, 데이터 1~2종" |
 | 실계좌 | Mock으로 먼저 전체를 돌리고, 한국투자증권 실계좌는 나중에 데모용으로 | 강의 권장 "더미 데이터로 우선 진행". 평가는 어차피 Mock |
 | 파일 구성 | 정해진 3개 파일 + `src/api.py`, `evaluation/run_eval.py`만 추가 | 강의 예시처럼 데이터 읽기는 도구 안에서, 가드레일은 시스템 프롬프트와 도구 설계로 |
-| 평가 | 강의 방식 채점 + 렌즈 숫자 정답 비교. RAGAS는 여유 시 | 숫자 오류는 자동으로 잡아야 함 |
+| 평가 | 강의 방식 채점 + 렌즈 숫자 정답 비교 + RAGAS(문서 질문 6개, Day 10 추가) | 숫자 오류는 자동으로 잡아야 함. README 템플릿에 RAGAS 지표 칸이 있음 |
 | 기술 스택 | Bedrock `ChatBedrockConverse`, `langchain.agents.create_agent` | `CLAUDE.md` 규칙 |
 
 ## 1. 아키텍처
@@ -111,7 +111,8 @@ evaluation/round1_report.md · round2_report.md
 | 시간 | 할 일 | 완료 기준 |
 |---|---|---|
 | 오전 | 개선 루프(한 번에 하나씩, 3회) → 2차 평가 → `round2_report.md` | ✅ 16/16, guardrail 3/3. 출력 숫자 검사 추가 |
-| 오전 | 여유 시: 실계좌 데모 연결, RAGAS, LangFuse | 선택 (MCP 전환은 하지 않기로 결정) |
+| 오전 | 여유 시: 실계좌 데모 연결, RAGAS, LangFuse | RAGAS 완료(faithfulness 0.75). 실계좌·LangFuse는 하지 않음. MCP 전환은 하지 않기로 결정 |
+| 오후 | 과제 규약 맞추기: 패턴 6개 이상(LCEL·Pydantic, 입력 가드레일, 미들웨어 추가로 7개), API 응답을 표준 형식(`contexts[doc_id,text]`, `trace[step,input,output]`)으로 | ✅ 재평가 16/16 |
 | 오후 | 시연 캡처(통합 합계 · 렌즈 전환 · 가드레일 거절, Mock 데이터로) · `requirements.txt` · 새 환경에서 실행 확인 | 새 venv로 실행 성공 |
 | 마감 | GitHub public push → 제출 (15:00 마감, 초안 기준이므로 확인 필요) | push 완료(https://github.com/thinkful75/sds-ax-mini-pjt), 제출 남음 |
 

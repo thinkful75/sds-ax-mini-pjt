@@ -37,7 +37,7 @@ evaluation/        test_queries.csv 와 평가 리포트
 
 PortfolioLens는 3일짜리 미니 프로젝트다(Day 8 기획 → Day 9 개발 → Day 10 마무리·제출). 여러 증권사에 흩어진 보유 자산을 자연어 질문 하나로 원하는 관점("렌즈")으로 다시 묶어 보여주는 **조회 전용** 에이전트다.
 
-Day 10 기준으로 개선 루프 3회와 2차 평가를 마쳤다(1차 14/16 → 2차 16/16, guardrail 3/3). 시스템 프롬프트 개선에 더해, "숫자는 도구 결과만" 규칙을 `src/api.py`의 출력 숫자 검사로 구조화했다(`evaluation/round2_report.md`). 저장소는 https://github.com/thinkful75/sds-ax-mini-pjt (`main`). 작업 전에 다음을 읽는다.
+Day 10 기준으로 개선 루프 3회와 2차 평가를 마쳤다(1차 14/16 → 2차 16/16, guardrail 3/3). 과제의 12개 패턴 중 6개 이상 적용 조건에 맞춰 7개(1 LCEL·Pydantic, 2 ReAct, 3 RAG, 4 도구 다중, 6 가드레일, 8 미들웨어, 12 평가·RAGAS)를 적용했다(README "활용한 패턴"). 시스템 프롬프트 개선에 더해, "숫자는 도구 결과만" 규칙을 `src/api.py`의 출력 숫자 검사로 구조화했다(`evaluation/round2_report.md`). 저장소는 https://github.com/thinkful75/sds-ax-mini-pjt (`main`). 작업 전에 다음을 읽는다.
 - `PLAN.md`: 확정한 결정, 도구·파일 설계, Mock 데이터 설계, 평가 설계, Day 9~10 일정
 - `SERVICE.md`: 사용자·문제, 도구 입출력 계약, 가드레일 정책, 성공 기준
 - `evaluation/test_queries.csv`: "완성"의 기준이 되는 16개 질문 세트(positive / negative / edge / guardrail)
@@ -55,6 +55,7 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 .venv/Scripts/python -m uvicorn src.api:app --port 8000   # http://localhost:8000/ 채팅 화면, POST /query
 .venv/Scripts/python evaluation/run_eval.py --round 1            # 16문항 전체 채점
 .venv/Scripts/python evaluation/run_eval.py --round 2 --ids 12,14  # 일부 문항만
+.venv/Scripts/python evaluation/run_eval.py --ragas              # 문서 질문 6개 RAGAS (채점 모델 JUDGE_MODEL_ID)
 ```
 
 - 모델은 `.env`의 `BEDROCK_MODEL_ID`(현재 `us.anthropic.claude-sonnet-4-6`)를 쓴다. 강의 계정은 `us.` 추론 프로필 ID로만 호출되고 Sonnet 4.6, Sonnet 4.5, Haiku 4.5만 허용된다. 임베딩은 `amazon.titan-embed-text-v2:0`.
@@ -63,7 +64,7 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 
 ## 아키텍처
 
-질문 → 에이전트(`src/agent.py`, 모델 `ChatBedrockConverse`, 시스템 프롬프트에 가드레일 규칙) → 도구 호출 → `src/api.py`에서 출력 검사(도구·문서에 없는 숫자가 있으면 한 번 다시 쓰게 하고 trace에 `number_check`로 기록, 그다음 계좌번호 마스킹) → `{answer, contexts, trace}`
+질문 → `src/api.py` 입력 가드레일(프롬프트 인젝션이면 모델 호출 없이 거절, trace에 `input_guard`) → 에이전트(`src/agent.py`, 모델 `ChatBedrockConverse`, 시스템 프롬프트에 가드레일 규칙, 미들웨어 `PIIMiddleware`·`ModelRetryMiddleware`) → 도구 호출 → `src/api.py`에서 출력 검사(도구·문서에 없는 숫자가 있으면 한 번 다시 쓰게 하고 trace에 `number_check`로 기록, 그다음 계좌번호 마스킹) → `{answer, contexts, trace}`
 
 파일 구성(정해진 3개 + 추가 2개, 그 밖의 파일은 요청 없이 만들지 않는다):
 - `src/agent.py`: 에이전트와 시스템 프롬프트. `python src/agent.py`로 시험 질문을 실행할 수 있게 한다.
@@ -77,7 +78,7 @@ cp .env.example .env                          # AWS 자격 증명과 리전을 �
 - **`build_view(lens, filter)`**: pandas 집계. 렌즈는 `account | asset_class | currency | sector | symbol`이고 항목별 매입금액·평가금액·평가손익·수익률·비중과 렌즈 총액을 낸다. `symbol` 렌즈는 같은 종목을 계좌를 넘어 합친다(수량 가중 평균단가). 반올림은 여기서 한 번만 한다(원화 원 단위, 달러·% 소수 2자리).
 - **`retrieve_docs(query)`**: 관련 문서 조각과 문서명을 돌려준다.
 
-`trace`는 이번 요청의 도구 호출 기록(도구 이름, 입력, 결과)이다. 출력 숫자 검사가 작동하면 `number_check` 항목이 덧붙는다. 지금은 Mock 데이터만 쓴다. 증권사 데이터는 MCP 없이 일반 도구로 읽는다(이유와 전환 조건은 `SERVICE.md` 2·3장). 한국투자증권 실계좌, LangFuse, RAGAS는 여유가 있을 때만 붙인다.
+응답 형식은 과제 표준 규약(§4-2)을 따른다: `contexts` = `[{"doc_id", "text"}]`(문서 조각은 문서 doc_id, 도구 결과는 `도구이름:입력`), `trace` = `[{"step", "input", "output"}]`(step은 도구 이름 또는 `input_guard`·`number_check`, input·output은 문자열). 숫자 검사에 걸린 답변은 LCEL 체인(`prompt | model.with_structured_output(RevisedAnswer)`)으로 다시 쓴다. 지금은 Mock 데이터만 쓴다. 증권사 데이터는 MCP 없이 일반 도구로 읽는다(이유와 전환 조건은 `SERVICE.md` 2·3장). 한국투자증권 실계좌, LangSmith·LangFuse는 여유가 있을 때만 붙인다. RAGAS는 `run_eval.py --ragas`로 돌린다(ragas 0.4.3이 langchain-community의 Vertex AI 모듈을 import해서, 스크립트가 빈 자리표시 모듈로 우회한다).
 
 ## 반드시 지킬 규칙 (구조와 guardrail 평가 케이스로 보장)
 

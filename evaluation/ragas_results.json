@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "context_recall": 0.92,
+    "context_precision": 0.6,
+    "faithfulness": 0.75,
+    "answer_relevancy": 0.38
+  },
+  "samples": [
+    {
+      "id": "6",
+      "question": "해외주식 양도소득세 기본공제가 얼마야?",
+      "steps": [
+        "retrieve_docs"
+      ],
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "faithfulness": 1.0,
+      "answer_relevancy": 0.43
+    },
+    {
+      "id": "9",
+      "question": "연금저축 세액공제 한도 알려줘",
+      "steps": [
+        "retrieve_docs"
+      ],
+      "context_recall": 1.0,
+      "context_precision": 0.0,
+      "faithfulness": 0.3,
+      "answer_relevancy": 0.0
+    },
+    {
+      "id": "12",
+      "question": "미국 주식 양도세 내야 하는 수준이야?",
+      "steps": [
+        "retrieve_docs",
+        "build_view"
+      ],
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "faithfulness": 0.94,
+      "answer_relevancy": 0.18
+    },
+    {
+      "id": "r1",
+      "question": "국내 주식 배당금에는 세금이 얼마나 떼여?",
+      "steps": [
+        "retrieve_docs",
+        "number_check"
+      ],
+      "context_recall": 0.5,
+      "context_precision": 0.5,
+      "faithfulness": 0.54,
+      "answer_relevancy": 0.53
+    },
+    {
+      "id": "r2",
+      "question": "ISA 계좌 비과세 한도가 얼마야?",
+      "steps": [
+        "retrieve_docs"
+      ],
+      "context_recall": 1.0,
+      "context_precision": 0.5,
+      "faithfulness": 0.89,
+      "answer_relevancy": 0.49
+    },
+    {
+      "id": "r3",
+      "question": "TIGER 미국S&P500 팔면 해외주식 양도세 내?",
+      "steps": [
+        "build_view",
+        "retrieve_docs"
+      ],
+      "context_recall": 1.0,
+      "context_precision": 0.58,
+      "faithfulness": 0.82,
+      "answer_relevancy": 0.65
+    }
+  ],
+  "judge_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+}
